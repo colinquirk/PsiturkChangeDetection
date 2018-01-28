@@ -1,15 +1,36 @@
 // Settings
+
+/*
+An array of all the set sizes you'd like to test.
+The total number of trials should be divisible by 2 * the length of the set_sizes array
+to account for same/different trials.
+*/
 var set_sizes = [6]
+/*
+The number of trials you'd like the participants to complete.
+150 trials gives you a decent signal to noise and only takes 10 minutes to complete.
+
+See the following citation for more info:
+Xu, Z., Adam, K. C. S., Fang, X., & Vogel, E. K. (2017). Behavior research methods
+*/
 var number_of_trials = 150
 
 
 // Experiment Logic
+// Be careful changing anything below this
+// For help, email cquirk@uchicago.edu
 var psiturk = PsiTurk(uniqueId, adServerLoc);
 
 var timeout = null;
 
+// idea stolen from stackoverflow
+// https://stackoverflow.com/questions/210717/using-jquery-to-center-a-div-on-the-screen
 jQuery.fn.center = function () {
-  this.css({'position':'absolute', 'left':'50%', 'top':'50%', 'transform':'translate(-50%, -50%)'});
+  this.css({'position':'absolute',
+            'left':'50%',
+            'top':'50%',
+            'transform':'translate(-50%, -50%)'
+  });
   return this;
 }
 
@@ -24,7 +45,6 @@ function permute( a, p ) {
 function end_experiment() {
   var end_exp_text = 
 `Thank you for completing this experiment.\n
-If you have any questions or concerns, please email cquirk@uchicago.edu.\n
 Hitting the button below will end the experiment.`;
 
   $('#displaydiv').append('<p id=text></p>');
@@ -37,11 +57,12 @@ Hitting the button below will end the experiment.`;
   $('#continue').click(function(){
     psiturk.saveData({
       success: psiturk.completeHIT,
-      error: psiturk.completeHIT
+      error: psiturk.completeHIT // End despite the error
     })
   });
 }
 
+// recreates a blank canvas every time we want to draw something new
 function blankCanvas(color) {
   $('body').empty()
   var canvas_html = "<canvas id='expcanvas' width=800 height=600 style='border:5px solid #000000'></canvas>";
@@ -53,6 +74,7 @@ function blankCanvas(color) {
   $('#displaydiv').center()
 }
 
+// displays some text on the first screen
 function welcome() {
   var welcome_text = 
 `Welcome to the experiment.\n
@@ -72,6 +94,7 @@ Press the button to continue.`;
   $('#continue').click(next_main_state);
 }
 
+// Tells the participants how to complete the experiment
 function instructions() {
   var instruct_text = 
 `
@@ -92,6 +115,13 @@ To view instructions for the task, press the button.
   $('#continue').click(next_main_state);
 }
 
+/*
+This is a class I use to help store data when I have multiple tasks with different fields.
+It's probably overkill in the particular situation.
+
+addFields is used to set up the header for each individual task.
+recordData marks unused fields as NA, then sends the data to psiturk and saves it
+*/
 class DataManager {
   constructor() {
     this.fields = [];
@@ -121,22 +151,22 @@ class DataManager {
     })
     
     psiturk.recordTrialData(recData);
-    psiturk.saveData();
+    psiturk.saveData(); // Consider if you want to save every trial
   }
-  
 }
 
 class K_Task {
   constructor(max_trials, set_sizes) {
-    this.max_trials = max_trials - 1;
+    this.max_trials = max_trials - 1; // make it 0 indexed
     this.set_sizes = set_sizes;
     this.trials_per_setsize = max_trials/set_sizes.length;
     this.cur_trial = 0;
     this.k_trial_state = 0;
-    this.radius = 45;
+    this.radius = 45; // size of the stimuli in pix
 
-    this.sample_time = 600;
+    this.sample_time = 600; // in ms
 
+    // All of the colors to be used
     this.colorList = ['#FF0000',
                       '#006600',
                       '#0000FF',
@@ -150,6 +180,7 @@ class K_Task {
                       '#804D00',
                       '#00FF00']
 
+    // simple state machine
     this.k_trial_states = [
       () => {this.display_fixation(_.random(600,900))},
       () => {this.display_sample()},
@@ -161,6 +192,7 @@ class K_Task {
     var locations = this.gen_rand_locations();
     var colors = this.gen_rand_colors();
 
+    // shuffle everything consistently
     var p = _.shuffle(_.range(this.max_trials+1))
     trial_types = permute(trial_types, p);
     locations[0] = permute(locations[0], p);
@@ -174,22 +206,40 @@ class K_Task {
                    sample_colors: colors,
                    foil_colors: locations[2]};
 
-    dm.addFields(['Task', 'Condition', 'SampleTime', 'RT', 'CRESP', 'RESP', 'ACC', 'SetSize', 'DisplayColor', 'TestColor', 'LocationPresentedX', 'LocationPresentedY'])
+    // TODO localize this
+    dm.addFields(['Task',
+                  'Condition',
+                  'SampleTime',
+                  'RT',
+                  'CRESP',
+                  'RESP',
+                  'ACC',
+                  'SetSize',
+                  'DisplayColor',
+                  'TestColor',
+                  'LocationPresentedX',
+                  'LocationPresentedY'
+    ])
 
     this.start = () => {
       this.startTime = Date.now();
       this.k_instructions();
     }
 
+    // manages the timing/trials
     this.next_k_trial_state = () => {
       blankCanvas('#888888');
+
+      // if the next state exists, do it
       if (this.k_trial_states[this.k_trial_state]) {
         this.k_trial_states[this.k_trial_state]()
         this.k_trial_state++
+      //otherwise, check if we have more trials
       } else {
-        if (this.cur_trial >= this.max_trials || Date.now() - this.startTime > 10 * 60 * 1000) {
-          next_main_state();
+        if (this.cur_trial >= this.max_trials) {
+          next_main_state(); // if not, move on
         } else {
+          // if we do, reset and run the next trial
           this.cur_trial++
           this.k_trial_state = 0;
           this.next_k_trial_state()
@@ -208,6 +258,7 @@ class K_Task {
     }
     return trial_types
   }
+
   gen_rand_colors() {
     var trial_colors = [];
 
@@ -221,12 +272,11 @@ class K_Task {
         trial_colors.push(temp);
       }
     }
-
     return trial_colors;
   }
 
   gen_rand_locations() {
-    var min_dist = 110;
+    var min_dist = 110; // How far apart should stimuli be in pixels
 
     var locations = [];
     var test_locs = [];
@@ -234,12 +284,13 @@ class K_Task {
 
     for (var i=0;i<this.set_sizes.length;i++) {
       for(var j=0;j<this.trials_per_setsize;j++) {
-        var temp_locs = [[400,300]];
+        var temp_locs = [[400,300]]; // check against the center too
         for(var k=0;k<this.set_sizes[i];k++) {
           trying:
           while(true) {
             var attempt = [_.random(200,600),_.random(150,450)];
             for(var p=0;p<temp_locs.length;p++) {
+              // test using euclidean distance
               if (Math.hypot(temp_locs[p][0]-attempt[0],temp_locs[p][1]-attempt[1]) < min_dist) {
                 continue trying;
               }
@@ -249,9 +300,12 @@ class K_Task {
           temp_locs.push(attempt);
         }
         locations.push(temp_locs.slice(1));
+        // generates the test loc
         var test = _.random(this.set_sizes[i]-1);
         test_locs.push(test);
         while (true) {
+          // generate a foil color that's not the same as the stim color
+          // TODO refactor this out of the locations function...
           var foil = _.random(this.colorList.length-1)
           if (foil != test) {
             foil_colors.push(this.colorList[foil])
@@ -299,13 +353,17 @@ Please be sure you understand the instructions. When you are ready to start, pre
     $('#text').css('font-size', '300%')
     $('#text').center()
 
+    // draws the circles
     var ctx = document.getElementById('expcanvas').getContext('2d');
+
     this.trials.locations[this.cur_trial].forEach((loc,i) => {
       ctx.fillStyle = this.trials.sample_colors[this.cur_trial][i];
       ctx.beginPath();
       ctx.arc(loc[0],loc[1],this.radius,0,2*Math.PI);
       ctx.fill();
     })
+
+    // waits the necessary amount of time
     var called = performance.now()
     timeout = setTimeout(() => {
       this.next_k_trial_state();
@@ -321,6 +379,7 @@ Please be sure you understand the instructions. When you are ready to start, pre
     var trialType = this.trials.trial_types[this.cur_trial];
     var displayColor = this.trials.sample_colors[this.cur_trial][this.trials.test_locs[this.cur_trial]];
 
+    // figure out which color should be drawn at the test location
     if (trialType == 0) {
       var testColor = displayColor;
     } else {
@@ -329,6 +388,7 @@ Please be sure you understand the instructions. When you are ready to start, pre
 
     var loc = this.trials.locations[this.cur_trial][this.trials.test_locs[this.cur_trial]]
 
+    // draws the circles
     var ctx = document.getElementById('expcanvas').getContext('2d');
     this.trials.locations[this.cur_trial].forEach((loc,i) => {
       ctx.fillStyle = this.trials.sample_colors[this.cur_trial][i];
@@ -346,6 +406,7 @@ Please be sure you understand the instructions. When you are ready to start, pre
 
     var rtStart = performance.now();
 
+    // gets the response and records the data
     $(document).keypress((e) => {
       if(e.which === 115 || e.which === 100) {
         var rtEnd = performance.now();
@@ -369,8 +430,6 @@ Please be sure you understand the instructions. When you are ready to start, pre
         } else {
             var acc = 0;
         }
-
-        console.log(acc);
 
         var ss = this.trials.locations[this.cur_trial].length;
 
@@ -397,6 +456,7 @@ dm = new DataManager();
 
 k_task = new K_Task(number_of_trials, set_sizes);
 
+// The state machine for the entire experiment
 var states = [
   welcome,
   instructions,
