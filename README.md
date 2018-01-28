@@ -38,6 +38,6 @@ For more information about what these files do and how to change them, please se
 
 ## Task Changes
 
-Two parameters that you are likely to want to change are the tested set sizes and the number of trials
+Two parameters that you are likely to want to change are the tested set sizes and the number of trials.
 
 For your convenience, these settings can be changed at the top of the static/js/task.js file.
